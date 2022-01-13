@@ -53,36 +53,41 @@ public final class CollectionViewDiffCalculator<Section: Equatable, Value: Equat
 
     /// The collection view to be managed.
     public weak var collectionView: UICollectionView?
-
+    private let forceReload: Bool
     /// Initializes a new diff calculator.
     ///
     /// - Parameters:
     ///   - collectionView: the collection view to be managed.
     ///   - initialSectionedValues: optional - if specified, these will be the initial contents of the diff calculator.
-    public init(collectionView: UICollectionView?, initialSectionedValues: SectionedValues<Section, Value> = SectionedValues()) {
+    public init(collectionView: UICollectionView?,
+                initialSectionedValues: SectionedValues<Section, Value> = SectionedValues(),
+                forceReload: Bool) {
         self.collectionView = collectionView
+        self.forceReload = forceReload
         super.init(initialSectionedValues: initialSectionedValues)
     }
 
     override internal func processChanges(newState: SectionedValues<Section, Value>, diff: [SectionedDiffStep<Section, Value>]) {
         guard let collectionView = self.collectionView else { return }
-// iOS 15+ crashes when performBatchUpdates is called here
-// so as a temporary workaround, we're reloading the data here
-// until a proper solution is found
-        self._sectionedValues = newState
-        collectionView.reloadData()
-//        collectionView.reloadData()
-//        collectionView.performBatchUpdates({
-//            self._sectionedValues = newState
-//            for result in diff {
-//                switch result {
-//                case let .delete(section, row, _): collectionView.deleteItems(at: [IndexPath(row: row, section: section)])
-//                case let .insert(section, row, _): collectionView.insertItems(at: [IndexPath(row: row, section: section)])
-//                case let .sectionDelete(section, _): collectionView.deleteSections(IndexSet(integer: section))
-//                case let .sectionInsert(section, _): collectionView.insertSections(IndexSet(integer: section))
-//                }
-//            }
-//        }, completion: nil)
+        // iOS 15+ crashes when performBatchUpdates is called here
+        // so as a temporary workaround, we're reloading the data here
+        // until a proper solution is found
+        if forceReload {
+            self._sectionedValues = newState
+            collectionView.reloadData()
+        } else {
+            collectionView.performBatchUpdates({
+                self._sectionedValues = newState
+                for result in diff {
+                    switch result {
+                    case let .delete(section, row, _): collectionView.deleteItems(at: [IndexPath(row: row, section: section)])
+                    case let .insert(section, row, _): collectionView.insertItems(at: [IndexPath(row: row, section: section)])
+                    case let .sectionDelete(section, _): collectionView.deleteSections(IndexSet(integer: section))
+                    case let .sectionInsert(section, _): collectionView.insertSections(IndexSet(integer: section))
+                    }
+                }
+            }, completion: nil)
+        }
     }
 }
 
@@ -181,9 +186,17 @@ public final class SingleSectionCollectionViewDiffCalculator<Value: Equatable> {
     ///   - tableView: the table view to be managed
     ///   - initialItems: optional - if specified, these will be the initial contents of the diff calculator.
     ///   - sectionIndex: optional - all insertion/deletion calls will be made on this index.
-    public init(collectionView: UICollectionView?, initialItems: [Value] = [], sectionIndex: Int = 0) {
+    public init(collectionView: UICollectionView?,
+                initialItems: [Value] = [],
+                sectionIndex: Int = 0,
+                forceReload: Bool = false) {
         self.collectionView = collectionView
-        self.internalDiffCalculator = CollectionViewDiffCalculator(collectionView: collectionView, initialSectionedValues: AbstractDiffCalculator<Int, Value>.buildSectionedValues(values: initialItems, sectionIndex: sectionIndex))
+        self.internalDiffCalculator = CollectionViewDiffCalculator(
+            collectionView: collectionView,
+            initialSectionedValues: AbstractDiffCalculator<Int, Value>.buildSectionedValues(values: initialItems,
+                                                                                            sectionIndex: sectionIndex),
+            forceReload: forceReload
+        )
         self.sectionIndex = sectionIndex
     }
 
